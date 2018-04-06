@@ -35,13 +35,13 @@ Options:
 
   -s, --sequencing-center   Provide a sequencing center name e.g. LGC_GENOMICS
    
-   -c, --campaign-name      Provide a campaign name e.g. OSD or MYOSD
+   -c, --campaign-name      Provide a campaign name e.g. OSD2014 or MYOSD2016
   
-   -d, --data-category      Provide the sequencing data category e.g. RRNA or shotgun
+   -d, --data-set           Provide the data set name e.g. 18S, 16S or shotgun
   
    -p, --processing-status  Provide a th (pre-) processing status of sequences e.g. RAW or WORKABLE
           
-   --primer                 Provide a the primer pair used for sequencing e.g. alma_alma or NONE in case of shotgung
+   --primer                 Provide a primer pair name used for sequencing e.g. alma_alma or NONE in case of shotgun
     
 EOF
 }
@@ -77,10 +77,10 @@ function main() {
 
             shift;
             ;;
-        -d|--data-category)
+        -d|--data-set)
             shift;
             check_empty_var "${1}" || {
-                log::error "Provide the sequencing data category e.g. RRNA or shotgun";
+                log::error "Provide the sequencing data category e.g. 16S or shotgun";
                 exit 66
             }
 
@@ -126,25 +126,39 @@ function main() {
 
   check_empty_var "${SEQUENCING_CENTER}" || {
     log::error "SEQUENCING_CENTER missing but required" 
+    exit 66
   }
   check_empty_var "${CAMPAIGN_NAME}" || {
     log::error "CAMPAIGN_NAME missing but required" 
+    exit 66
   }
   check_empty_var "${DATA_CAT}" || {
-    log::error "DATA_CAT missing but required" 
+    log::error "DATA SET name missing but required" 
+    exit 66
   }
   check_empty_var "${PROCESSING_STATUS}" || {
     log::error "PROCESSING_STATUS missing but required" 
+    exit 66
   }
   check_empty_var "${PRIMER_PAIR}" || {
     log::error "PRIMER_PAIR missing but required" 
+    exit 66
   }
 
+  # now checking last argument
+  if [[ -d ${1} ]]; then
+    echo "dir=${dir} exists. Can proceed..."
+  else
+    echo "dir=${dir} does not exist"
+    exit 1
+  fi
 
-log::debug "
+
+
+  log::debug "
 SEQUENCING_CENTER=${SEQUENCING_CENTER} 
 CAMPAIGN_NAME=${CAMPAIGN_NAME}
-DATA_CAT=${DATA_CAT}
+DATA SET=${DATA_CAT}
 PROCESSING_STATUS=${PROCESSING_STATUS}
 PIMER PAIR=${PRIMER_PAIR}
 "
@@ -154,13 +168,7 @@ PIMER PAIR=${PRIMER_PAIR}
   local md5_report="md5_${CAMPAIGN_NAME}_${PROCESSING_STATUS}_${DATA_CAT}_report_${CUR_DATE}.txt"
   local submission_report="submission_${CAMPAIGN_NAME}_${PROCESSING_STATUS}_${DATA_CAT}_files_report_${CUR_DATE}.csv"
 
-  if [[ -d ${1} ]]; then
-    echo "dir=${dir} exists. Can proceed..."
-  else
-    echo "dir=${dir} does not exist"
-    exit 1
-  fi
-
+ 
   rm --force --verbose {submission_report}
 
   cat ${dir}/*fast[aq].gz.md5 > ${md5_report}
