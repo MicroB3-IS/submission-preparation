@@ -1,0 +1,257 @@
+#/bin/bash
+# author Renzo Kottmann 2018-02-01
+
+# This script creates symbolic links and md5 to the raw datafiles for
+#  16S and 18 raw and workable datasets
+
+# current dir (CWD) has to be sequence-data
+#declare -r CWD=$(basename ${PWD})
+
+#declare -r OSD_DIR='/bioinf/projects/osd/main/2015/06'
+
+# from LGC
+#declare -r LGC_RAW_18S_DATA_DIR=${OSD_DIR}'/pre-processing/18S/primer-clipping/lgc'
+#declare -r LGC_WORKABLE_18S_DATA_DIR=${OSD_DIR}'/pre-processing/18S/quality-trimming/lgc'
+#declare -r LGC_RAW_16S_DATA_DIR=${OSD_DIR}'/pre-processing/16S/primer-clipping/lgc'
+#declare -r LGC_WORKABLE_16S_DATA_DIR=${OSD_DIR}'/pre-processing/16S/quality-trimming/lgc'
+
+declare -r DEBUG='true'
+
+
+function log::debug () {
+  test -z "${DEBUG}" && { echo "ERROR: DEBUG variable not set"; exit 100; }
+  test -n "${DEBUG}" && echo "DEBUG ${1}" 1>&2;
+}
+
+
+function log::error () {
+   test -z "${DEBUG}" && { echo "ERROR: DEBUG variable not set"; exit 100; }
+   test -n "${DEBUG}" && echo "ERROR ${1}" 1>&2;
+}
+
+
+function check_empty_var() {
+    if [[ ! ${1} ]]; then
+        log::error "Variable is empty";
+        return 100 
+    fi
+    return 0
+}
+
+# declare -r BLACKLIST="OSD11-Dec-2012* OSD11-Dec-2013* OSD11-July-2013* OSD21-Dec-2012* OSD21-Dec-2013* OSD90-melted* OSD187* OSD187-DNAKit* OSD187-RNAlater* OSD187-minus80C* OSD4sterivex*"
+
+function create_dir_structure {
+
+
+  echo "Current base dirname=${CWD}"
+  check_empty_var "${1}" || exit 999
+
+  local -r SUBMISSION_DIR="${1}"
+
+  mkdir -pv "${SUBMISSION_DIR}"
+
+}
+
+
+function blacklist() {
+
+  #
+  # delete blacklist: OSD_R[12]-_16S
+  #
+  echo "Deleting: ${BLACKLIST}"
+  rm  ${BLACKLIST}
+}
+
+function calc_md5() {
+
+  ## doing all md5 for 18S or 16S
+  echo 'creating md5s'
+  for i in *.fasta.gz ; do
+    echo "md5 for ${i}"
+    md5sum ${i} > ${i}.md5;
+  done
+
+  chmod 664 *.md5
+}
+
+
+function create_usage() {
+    cat <<EOF
+
+Usage: ${SCRIPT_NAME}
+
+Options:
+
+  -n
+  --subsmission-name  Give of a submission to be done e.g. myosd or osd 
+    
+EOF
+}
+
+function main() {
+
+  local SUBMISSION_NAME='unknown'
+  log::debug "Num options=$#"
+  log::debug "first option=${1}="
+
+  check_empty_var "${1}" || { log::debug 'Provide options';  create_usage; }
+
+  while [[ $# -gt 0 ]]; do
+
+    case ${1} in
+        
+        -n|--submission-name)
+            shift;
+            check_empty_var "${1}" || {
+                log::error "Provide a submission name";
+                exit 66
+            }
+
+            local -r SUBMISSION_NAME="${1}"
+
+            shift;
+            ;;
+        -s|--sequencing-center)
+            shift;
+            check_empty_var "${1}" || {
+                log::error "Provide a sequencing center name e.g. LGC_GENOMICS";
+                exit 66
+            }
+
+            local -r SEQUENCING_CENTER="${1,,}"
+
+            shift;
+            ;;
+        -c|--campaign-name)
+            shift;
+            check_empty_var "${1}" || {
+                log::error "Provide a campaign name e.g. OSD or MYOSD";
+                exit 66
+            }
+
+            local -r CAMPAIGN_NAME="${1}"
+
+            shift;
+            ;;
+        -d|--data-set)
+            shift;
+            check_empty_var "${1}" || {
+                log::error "Provide the sequencing data category e.g. RRNA or shotgun";
+                exit 66
+            }
+
+            local -r DATA_SET="${1,,}"
+
+            shift;
+            ;;
+        -p|--processing-status)
+            shift;
+            check_empty_var "${1}" || {
+                log::error "Provide a th (pre-) processing status of sequences e.g. RAW or WORKABLE";
+                exit 66
+            }
+
+            local -r PROCESSING_STATUS="${1,,}"
+
+            shift;
+            ;;
+        --primer)
+            shift;
+            check_empty_var "${1}" || {
+                log::error "Provide a the primer pair used for sequencing e.g. alma_alma or NONE in case of shotgung";
+                exit 66
+            }
+
+            local -r PRIMER_PAIR="${1,,}"
+
+            shift;
+            ;;
+        -h|--help)
+            create_usage ;
+            exit 0
+            ;;
+        *) 
+            log::error "Unknown option  $1"
+            log::debug  "Option  $1 unknown"
+            create_usage ;
+            exit 77
+            shift;
+            ;;
+    esac
+  done
+
+
+
+  check_empty_var "${SUBMISSION_NAME}" || {
+    log::error "SEQUENCING_CENTER missing but required" 
+    exit 66
+  }
+  check_empty_var "${SEQUENCING_CENTER}" || {
+    log::error "SEQUENCING_CENTER missing but required" 
+    exit 66
+  }
+  check_empty_var "${CAMPAIGN_NAME}" || {
+    log::error "CAMPAIGN_NAME missing but required" 
+    exit 66
+  }
+  check_empty_var "${DATA_SET}" || {
+    log::error "DATA SET name missing but required" 
+    exit 66
+  }
+  check_empty_var "${PROCESSING_STATUS}" || {
+    log::error "PROCESSING_STATUS missing but required" 
+    exit 66
+  }
+  check_empty_var "${PRIMER_PAIR}" || {
+    log::error "PRIMER_PAIR missing but required" 
+    exit 66
+  }
+
+  # now checking last argument
+  if [[ -d ${1} ]]; then
+    echo "dir=${dir} exists. Can proceed..."
+#TODO check more about source dir, like does it have readable files etc.
+    local -r SOURCE_DIR="${1}"
+  else
+    log::error "dir=${dir} does not exist"
+    exit 1
+  fi
+
+
+
+  local -r FILE_TAG="${CAMPAIGN_NAME}-${DATA_SET}-${PRIMER_PAIR}-${PROCESSING_STATUS}" 
+  local -r DESTINATION_DIR="${FILE_TAG}-{SUBMISSION_NAME}"
+
+  create_dir_structure "${DESTINATION_DIR}"
+
+  #cd "${SUBMISSION_NAME}"/workable
+
+  local -r DIR_PATTERN='/OSD2015_*/fasta/*'
+
+  shopt -s nullglob
+  # TODO also add 2016-01-26
+  for FILE in "${SOURCE_DIR}"/2016-03-11/OSD2015_*/fasta/* ; do
+  if [ -e "${FILE}" ] ; then  
+    fname=$(basename ${FILE});
+    #fname=${fname%%.fasta.gz};
+    #fname="${fname##515F-806R-}_16S_raw.fasta.gz";
+    log::debug "new link name=${fname} of ${FILE}"
+    ln -sf "${FILE}" "${fname}" || exit 1000;
+
+  else
+    echo "${FILE} does not exist" 
+  fi
+done
+
+# echo " now correcting mis-labbeled data files"
+
+#sleep 10s
+
+# removing not to be submitted files
+# blacklist
+
+  echo "Done :)"
+}
+
+log::debug 'Hi script'
+main "$@"
