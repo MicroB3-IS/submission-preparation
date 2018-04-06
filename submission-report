@@ -21,7 +21,7 @@ function log::error () {
 function check_empty_var() {
     if [[ ! ${1} ]]; then
         log::error "Variable is empty";
-        return 100 
+        return 100
     fi
     return 0
 }
@@ -33,16 +33,16 @@ Usage: ${0}
 
 Options:
 
-  -s, --sequencing-center   Provide a sequencing center name e.g. LGC_GENOMICS
-   
-   -c, --campaign-name      Provide a campaign name e.g. OSD2014 or MYOSD2016
-  
-   -d, --data-set           Provide the data set name e.g. 18S, 16S or shotgun
-  
-   -p, --processing-status  Provide a th (pre-) processing status of sequences e.g. RAW or WORKABLE
-          
-   --primer                 Provide a primer pair name used for sequencing e.g. alma_alma or NONE in case of shotgun
-    
+  -s, --sequencing-center  Provide a sequencing center name e.g. LGC_GENOMICS
+
+  -c, --campaign-name      Provide a campaign name e.g. OSD2014 or MYOSD2016
+
+  -d, --data-set           Provide the data set name e.g. 18S, 16S or shotgun
+
+  -p, --processing-status  Provide a th (pre-) processing status of sequences e.g. RAW or WORKABLE
+
+  --primer                 Provide a primer pair name used for sequencing e.g. alma_alma or NONE in case of shotgun
+
 EOF
 }
 
@@ -54,7 +54,7 @@ function main() {
   while [[ $# -gt 0 ]]; do
 
      case ${1} in
-        
+
         -s|--sequencing-center)
             shift;
             check_empty_var "${1}" || {
@@ -114,70 +114,79 @@ function main() {
             create_usage ;
             exit 0
             ;;
-        *) 
+        *)
             log::error "Unknown option  $1"
             log::debug  "Option  $1 unknown"
-            create_usage ;
-            exit 77
+            declare -gr dir="${1}"
+            # now checking last argument
+            if [[ -d ${1} ]]; then
+              echo "dir=${dir} exists. Can proceed..."
+            else
+              log::error "dir=${dir} does not exist"
+              exit 1
+            fi
             shift;
             ;;
     esac
   done
 
   check_empty_var "${SEQUENCING_CENTER}" || {
-    log::error "SEQUENCING_CENTER missing but required" 
+    log::error "SEQUENCING_CENTER missing but required"
     exit 66
   }
   check_empty_var "${CAMPAIGN_NAME}" || {
-    log::error "CAMPAIGN_NAME missing but required" 
+    log::error "CAMPAIGN_NAME missing but required"
     exit 66
   }
   check_empty_var "${DATA_CAT}" || {
-    log::error "DATA SET name missing but required" 
+    log::error "DATA SET name missing but required"
     exit 66
   }
   check_empty_var "${PROCESSING_STATUS}" || {
-    log::error "PROCESSING_STATUS missing but required" 
+    log::error "PROCESSING_STATUS missing but required"
     exit 66
   }
   check_empty_var "${PRIMER_PAIR}" || {
-    log::error "PRIMER_PAIR missing but required" 
+    log::error "PRIMER_PAIR missing but required"
     exit 66
   }
 
-  # now checking last argument
-  if [[ -d ${1} ]]; then
-    echo "dir=${dir} exists. Can proceed..."
-  else
-    echo "dir=${dir} does not exist"
-    exit 1
-  fi
 
 
 
   log::debug "
-SEQUENCING_CENTER=${SEQUENCING_CENTER} 
+SEQUENCING_CENTER=${SEQUENCING_CENTER}
 CAMPAIGN_NAME=${CAMPAIGN_NAME}
 DATA SET=${DATA_CAT}
 PROCESSING_STATUS=${PROCESSING_STATUS}
 PIMER PAIR=${PRIMER_PAIR}
 "
 
-  local -r dir=${1}
+
   local -r CUR_DATE=$(date --rfc-3339=date)
-  local md5_report="md5_${CAMPAIGN_NAME}_${PROCESSING_STATUS}_${DATA_CAT}_report_${CUR_DATE}.txt"
+  local md5_report="submission_md5_${CAMPAIGN_NAME}_${PROCESSING_STATUS}_${DATA_CAT}_report_${CUR_DATE}.txt"
   local submission_report="submission_${CAMPAIGN_NAME}_${PROCESSING_STATUS}_${DATA_CAT}_files_report_${CUR_DATE}.csv"
 
- 
-  rm --force --verbose {submission_report}
 
-  cat ${dir}/*fast[aq].gz.md5 > ${md5_report}
+  rm --force --verbose "${submission_report}"
+  log::debug "dir=${dir}"
+
+  shopt -s extglob
+
+  cat "${dir}/"*.md5 > ${md5_report}
 
   cat ${md5_report}  | \
-    while read md5 filename; do 
+    while read md5 filename; do
       # if md5 is from binary file there is * at beginning, therefore replace with nothing in case
       filename=${filename/#\*/}
-      echo "${CAMPAIGN_NAME},${DATA_CAT},${PROCESSING_STATUS},${PRIMER_PAIR},${md5},${filename},$(readlink -f ${dir}/${filename})" >> ${submission_report} ;
+      filename=$(basename "${filename}")
+      pp_fullpath=$(readlink -f "${dir}/${filename}")
+      log::debug "
+        filename=${filename}
+        dir=${dir}
+        fullpath=${pp_fullpath}
+      "
+      echo "${CAMPAIGN_NAME},${DATA_CAT},${PROCESSING_STATUS},${PRIMER_PAIR},${md5},${filename},${pp_fullpath}" >> ${submission_report} ;
     done
 }
 

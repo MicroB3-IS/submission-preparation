@@ -33,12 +33,23 @@ function log::error () {
 function check_empty_var() {
     if [[ ! ${1} ]]; then
         log::error "Variable is empty";
-        return 100 
+        return 100
     fi
     return 0
 }
 
-# declare -r BLACKLIST="OSD11-Dec-2012* OSD11-Dec-2013* OSD11-July-2013* OSD21-Dec-2012* OSD21-Dec-2013* OSD90-melted* OSD187* OSD187-DNAKit* OSD187-RNAlater* OSD187-minus80C* OSD4sterivex*"
+
+function _check_required_programs() {
+
+    # Required program(s)
+    #req_progs=(readlink date md5)
+    for p in ${@}; do
+	hash "${p}" 2>&- || \
+	    { echo >&2 " Required program \"${p}\" not installed or in search PATH.";
+        exit 1;
+      }
+    done
+}
 
 function create_dir_structure {
 
@@ -78,13 +89,21 @@ function calc_md5() {
 function create_usage() {
     cat <<EOF
 
-Usage: ${SCRIPT_NAME}
+Usage: ${BASH_SOURCE} [Options] directory
 
 Options:
 
-  -n
-  --subsmission-name  Give of a submission to be done e.g. myosd or osd 
-    
+  -n, --subsmission-name   Give of a submission to be done e.g. myosd or osd
+  -s, --sequencing-center  Provide a sequencing center name e.g. LGC_GENOMICS
+
+  -c, --campaign-name      Provide a campaign name e.g. OSD2014 or MYOSD2016
+
+  -d, --data-set           Provide the data set name e.g. 18S, 16S or shotgun
+
+  -p, --processing-status  Provide a th (pre-) processing status of sequences e.g. RAW or WORKABLE
+
+  --primer                 Provide a primer pair name used for sequencing e.g. alma_alma or NONE in case of shotgun
+
 EOF
 }
 
@@ -94,161 +113,208 @@ function main() {
   log::debug "Num options=$#"
   log::debug "first option=${1}="
 
+declare -r RUN="${@}"
+
   check_empty_var "${1}" || { log::debug 'Provide options';  create_usage; }
+  _check_required_programs md5sum readlink
 
   while [[ $# -gt 0 ]]; do
 
     case ${1} in
-        
-        -n|--submission-name)
-            shift;
-            check_empty_var "${1}" || {
-                log::error "Provide a submission name";
-                exit 66
-            }
 
-            local -r SUBMISSION_NAME="${1}"
+      -n|--submission-name)
+        shift;
+        check_empty_var "${1}" || {
+          log::error "Provide a submission name";
+          exit 66
+        }
 
-            shift;
-            ;;
+        local -r SUBMISSION_NAME="${1}"
+        shift;
+        ;;
+
         -s|--sequencing-center)
-            shift;
-            check_empty_var "${1}" || {
-                log::error "Provide a sequencing center name e.g. LGC_GENOMICS";
-                exit 66
-            }
+          shift;
+          check_empty_var "${1}" || {
+            log::error "Provide a sequencing center name e.g. LGC_GENOMICS";
+            exit 66
+          }
 
-            local -r SEQUENCING_CENTER="${1,,}"
+          local -r SEQUENCING_CENTER="${1,,}"
+          shift;
+          ;;
 
-            shift;
-            ;;
         -c|--campaign-name)
-            shift;
-            check_empty_var "${1}" || {
-                log::error "Provide a campaign name e.g. OSD or MYOSD";
-                exit 66
-            }
+          shift;
+          check_empty_var "${1}" || {
+            log::error "Provide a campaign name e.g. OSD or MYOSD";
+            exit 66
+          }
 
-            local -r CAMPAIGN_NAME="${1}"
+          local -r CAMPAIGN_NAME="${1}"
+          shift;
+          ;;
 
-            shift;
-            ;;
         -d|--data-set)
-            shift;
-            check_empty_var "${1}" || {
-                log::error "Provide the sequencing data category e.g. RRNA or shotgun";
-                exit 66
-            }
+          shift;
+          check_empty_var "${1}" || {
+            log::error "Provide the sequencing data category e.g. RRNA or shotgun";
+            exit 66
+          }
 
-            local -r DATA_SET="${1,,}"
+          local -r DATA_SET="${1,,}"
+          shift;
+          ;;
 
-            shift;
-            ;;
         -p|--processing-status)
-            shift;
-            check_empty_var "${1}" || {
-                log::error "Provide a th (pre-) processing status of sequences e.g. RAW or WORKABLE";
-                exit 66
-            }
+          shift;
+          check_empty_var "${1}" || {
+            log::error "Provide a th (pre-) processing status of sequences e.g. RAW or WORKABLE";
+            exit 66
+          }
 
-            local -r PROCESSING_STATUS="${1,,}"
+          local -r PROCESSING_STATUS="${1,,}"
+          shift;
+          ;;
 
-            shift;
-            ;;
         --primer)
-            shift;
-            check_empty_var "${1}" || {
-                log::error "Provide a the primer pair used for sequencing e.g. alma_alma or NONE in case of shotgung";
-                exit 66
-            }
+          shift;
+          check_empty_var "${1}" || {
+            log::error "Provide a the primer pair used for sequencing e.g. alma_alma or NONE in case of shotgung";
+            exit 66
+          }
 
-            local -r PRIMER_PAIR="${1,,}"
+          local -r PRIMER_PAIR="${1,,}"
+          shift;
+          ;;
+        -o|--output-dir)
+          shift;
+          check_empty_var "${1}" || {
+            log::error "Provide a output directory where files get created in";
+            exit 66
+          }
 
-            shift;
-            ;;
+          local -r OUTPUT_BASE_DIR='/OSD2015_*/fasta/*'
+          shift;
+          ;;
+        --file-pattern)
+          shift;
+          check_empty_var "${1}" || {
+            log::error "Provide a bash compatible pattern for files to be included in submission preparation. This should be relative to directory provided as last argument. Without leading slash";
+            exit 66
+          }
+
+          local -r DIR_PATTERN=${1}
+          shift;
+          ;;
+
         -h|--help)
-            create_usage ;
-            exit 0
-            ;;
-        *) 
-            log::error "Unknown option  $1"
-            log::debug  "Option  $1 unknown"
-            create_usage ;
-            exit 77
-            shift;
-            ;;
+          create_usage ;
+          exit 0
+          ;;
+
+        *)
+
+          log::debug  "Rest is source directory"
+          #create_usage ;
+
+                # now checking last argument
+          if [[ -d ${1} ]]; then
+            echo "directory=${1} exists. Can proceed..."
+            #TODO check more about source dir, like does it have readable files etc.
+            # need absolute path to source dit
+            local -r SOURCE_DIR=$(readlink -f "${1}")
+            log::debug "Source dir=${SOURCE_DIR}"
+          else
+            log::error "directory=${1} does not exist"
+            exit 1
+          fi
+          shift;
+          ;;
+
     esac
   done
 
 
 
   check_empty_var "${SUBMISSION_NAME}" || {
-    log::error "SEQUENCING_CENTER missing but required" 
+    log::error "SEQUENCING_CENTER missing but required"
     exit 66
   }
   check_empty_var "${SEQUENCING_CENTER}" || {
-    log::error "SEQUENCING_CENTER missing but required" 
+    log::error "SEQUENCING_CENTER missing but required"
     exit 66
   }
   check_empty_var "${CAMPAIGN_NAME}" || {
-    log::error "CAMPAIGN_NAME missing but required" 
+    log::error "CAMPAIGN_NAME missing but required"
     exit 66
   }
   check_empty_var "${DATA_SET}" || {
-    log::error "DATA SET name missing but required" 
+    log::error "DATA SET name missing but required"
     exit 66
   }
   check_empty_var "${PROCESSING_STATUS}" || {
-    log::error "PROCESSING_STATUS missing but required" 
+    log::error "PROCESSING_STATUS missing but required"
     exit 66
   }
   check_empty_var "${PRIMER_PAIR}" || {
-    log::error "PRIMER_PAIR missing but required" 
+    log::error "PRIMER_PAIR missing but required"
+    exit 66
+  }
+  check_empty_var "${DIR_PATTERN}" || {
+    log::error "FILE PATTERN is missing but required"
     exit 66
   }
 
-  # now checking last argument
-  if [[ -d ${1} ]]; then
-    echo "dir=${dir} exists. Can proceed..."
-#TODO check more about source dir, like does it have readable files etc.
-    local -r SOURCE_DIR="${1}"
-  else
-    log::error "dir=${dir} does not exist"
-    exit 1
-  fi
 
 
-
-  local -r FILE_TAG="${CAMPAIGN_NAME}-${DATA_SET}-${PRIMER_PAIR}-${PROCESSING_STATUS}" 
-  local -r DESTINATION_DIR="${FILE_TAG}-{SUBMISSION_NAME}"
+  local -r FILE_TAG="${CAMPAIGN_NAME}-${DATA_SET}-${PRIMER_PAIR}-${PROCESSING_STATUS}"
+  local -r DESTINATION_DIR="${FILE_TAG}-${SUBMISSION_NAME}"
 
   create_dir_structure "${DESTINATION_DIR}"
 
   #cd "${SUBMISSION_NAME}"/workable
 
-  local -r DIR_PATTERN='/OSD2015_*/fasta/*'
 
   shopt -s nullglob
   # TODO also add 2016-01-26
-  for FILE in "${SOURCE_DIR}"/2016-03-11/OSD2015_*/fasta/* ; do
-  if [ -e "${FILE}" ] ; then  
-    fname=$(basename ${FILE});
-    #fname=${fname%%.fasta.gz};
-    #fname="${fname##515F-806R-}_16S_raw.fasta.gz";
-    log::debug "new link name=${fname} of ${FILE}"
-    ln -sf "${FILE}" "${fname}" || exit 1000;
+  #local -r TEST_PATTERN='OSD2015_*/fasta/*'
 
-  else
-    echo "${FILE} does not exist" 
-  fi
-done
+  for FILE in "${SOURCE_DIR}/"${DIR_PATTERN} ; do
+    if [ -e "${FILE}" ] ; then
+      fname="${DESTINATION_DIR}/"$(basename ${FILE});
+      log::debug "new link name=${fname} of ${FILE}"
+      ln -sf "${FILE}" "${fname}" || exit 1000;
+    else
+      echo "${FILE} does not exist"
+    fi
+  done
 
-# echo " now correcting mis-labbeled data files"
+  # becaause of md5sum writing filepath in report need to do it local to file
+  $( cd "${DESTINATION_DIR}";
+     for FILE in * ; do
+       log::debug "file=${FILE}";
+       md5sum "./${FILE}" > "${FILE}.md5" || {
+         log::error "Can not create md5sum" && exit 1000;
+      };
+     done
+  ) || exit 9999
 
-#sleep 10s
+local -r CUR_DATE=$(date)
 
-# removing not to be submitted files
-# blacklist
+# ADDING README
+cat > "${DESTINATION_DIR}/README.md" <<EOF
+# Submission Perparation
+
+This directory contains files from the submission preparation run with
+
+Script: ${BASH_SOURCE}
+Script Parameters: ${RUN}
+Called from direcotry: ${PWD}
+User: ${USER}
+Time: ${CUR_DATE}
+
+EOF
 
   echo "Done :)"
 }
