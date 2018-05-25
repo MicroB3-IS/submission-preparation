@@ -62,7 +62,7 @@ function main() {
                 exit 66
             }
 
-            local -r SEQUENCING_CENTER="${1,,}"
+            local -r SEQUENCING_CENTER="${1}"
 
             shift;
             ;;
@@ -84,7 +84,7 @@ function main() {
                 exit 66
             }
 
-            local -r DATA_CAT="${1,,}"
+            local -r DATA_CAT="${1^^}"
 
             shift;
             ;;
@@ -186,7 +186,7 @@ PIMER PAIR=${PRIMER_PAIR}
         dir=${dir}
         fullpath=${pp_fullpath}
       "
-      echo "${CAMPAIGN_NAME},${DATA_CAT},${PROCESSING_STATUS},${PRIMER_PAIR},${md5},${filename},${pp_fullpath}" >> ${submission_report} ;
+      echo "${CAMPAIGN_NAME},${SEQUENCING_CENTER},${DATA_CAT},${PROCESSING_STATUS},${PRIMER_PAIR},${md5},${filename},${pp_fullpath}" >> ${submission_report} ;
     done
 }
 
